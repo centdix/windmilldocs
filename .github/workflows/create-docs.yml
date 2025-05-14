@@ -1,0 +1,101 @@
+# docs/.github/workflows/create-docs-pr.yml
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: number
+      pr_branch:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+
+jobs:
+  generate-and-pr:
+    runs-on: ubuntu-latest # TODO: use ubicloud
+
+    steps:
+      # 1) fetch PR title and body from other repo
+      - name: Fetch PR details
+        id: fetch-pr
+        run: |
+          PR_DETAILS=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/centdix/${{ inputs.repo }}/pulls/${{ inputs.pr_number }}")
+
+          echo "PR_TITLE=$(echo "$PR_DETAILS" | jq -r .title)" >> $GITHUB_ENV
+          echo "PR_BODY=$(echo "$PR_DETAILS" | jq -r .body)" >> $GITHUB_ENV
+
+      # 2) check out this (docs) repo
+      - uses: actions/checkout@v3
+
+      # 3) create a new branch from main
+      - name: Create new branch
+        run: |
+          git checkout -b docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+
+      # 4) send PR content to external API
+      # - name: Send to external API
+      #   id: api-call
+      #   run: |
+      #     echo "Sending PR content to external API..."
+
+      #     PR_TITLE_ESC=$(printf '%q' "${{ env.PR_TITLE }}")
+      #     PR_BODY_ESC=$(printf '%q' "${{ env.PR_BODY }}")
+
+      #     JSON_PAYLOAD=$(jq -n \
+      #       --arg title "$PR_TITLE_ESC" \
+      #       --arg body "$PR_BODY_ESC" \
+      #       '{"body":{"pr_title":$title,"pr_body":$body,"repo":"${{ inputs.repo }}","pr_number":${{ inputs.pr_number }}}}')
+
+      #     API_RESULT=$(curl -s -w "\n%{http_code}" \
+      #       -X POST "https://app.windmill.dev/api/w/windmill-labs/jobs/run_wait_result/p/f/ai/quiet_script" \
+      #       -H "Content-Type: application/json" \
+      #       -H "Authorization: Bearer ${{ secrets.WINDMILL_TOKEN }}" \
+      #       --data-binary "$JSON_PAYLOAD" \
+      #       --max-time 90)
+
+      #     HTTP_CODE=$(echo "$API_RESULT" | tail -n1)
+      #     RESPONSE_BODY=$(echo "$API_RESULT" | sed '$d')
+
+      #     if [ "$HTTP_CODE" -ne 200 ]; then
+      #       echo "API call failed with status code $HTTP_CODE: $RESPONSE_BODY"
+      #       exit 1
+      #     fi
+
+      #     # Extract the changes from API response
+      #     echo "$RESPONSE_BODY" | jq -r '.changes[]?' > changes.json
+
+      #     # Store response for next step
+      #     echo "API_RESPONSE=$RESPONSE_BODY" >> $GITHUB_ENV
+
+      # 5) commit the changes from API output
+      - name: Create hello world file
+        run: |
+          echo "hello world" > hello.txt
+
+          # Add and commit the file
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add hello.txt
+          git commit -m "docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}" || echo "No changes to commit"
+
+      # 6) open a PR to main from that branch
+      - name: Create docs PR
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}
+          branch: docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+          base: main
+          title: >
+            Docs updates for ${{ inputs.repo }}#${{ inputs.pr_number }}
+          body: |
+            This PR was auto-generated to bring the docs up to date
+            for [PR #${{ inputs.pr_number }}](
+            https://github.com/windmill-labs/${{ inputs.repo }}/pull/${{ inputs.pr_number }})
+            in the main repo.
