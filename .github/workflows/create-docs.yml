@@ -83,6 +83,10 @@ jobs:
           git add hello.txt
           git commit -m "docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}" || echo "No changes to commit"
 
+      - name: Push changes
+        run: |
+          git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+
       # 6) open a PR to main from that branch
       - name: Create docs PR
         uses: peter-evans/create-pull-request@v5
