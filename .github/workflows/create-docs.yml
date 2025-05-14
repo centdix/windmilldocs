@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           repository: centdix/windmilldocs
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DOCS_TOKEN }}
 
       # 3) create a new branch from main
       - name: Create new branch
@@ -88,13 +88,14 @@ jobs:
 
       - name: Push changes
         run: |
+          git remote set-url origin https://x-access-token:${{ secrets.DOCS_TOKEN }}@github.com/centdix/windmilldocs.git
           git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
 
       # 6) open a PR to main from that branch
       - name: Create docs PR
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DOCS_TOKEN }}
           commit-message: |
             docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}
           branch: docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
