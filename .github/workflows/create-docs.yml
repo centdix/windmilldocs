@@ -31,6 +31,9 @@ jobs:
 
       # 2) check out this (docs) repo
       - uses: actions/checkout@v3
+        with:
+          repository: centdix/windmilldocs
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 3) create a new branch from main
       - name: Create new branch
@@ -103,3 +106,5 @@ jobs:
             for [PR #${{ inputs.pr_number }}](
             https://github.com/windmill-labs/${{ inputs.repo }}/pull/${{ inputs.pr_number }})
             in the main repo.
+          repository: centdix/windmilldocs
+          path: .
