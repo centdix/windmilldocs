@@ -41,7 +41,15 @@ jobs:
       # 3) create a new branch from main
       - name: Create new branch
         run: |
-          git checkout -b docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+          # Check if branch already exists remotely
+          if git ls-remote --heads origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }} | grep -q docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}; then
+            # Branch exists, check it out
+            git fetch origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+            git checkout docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+          else
+            # Create new branch
+            git checkout -b docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+          fi
 
       # 4) send PR content to external API
       # - name: Send to external API
@@ -82,9 +90,6 @@ jobs:
       - name: Create hello world file
         run: |
           echo "hello world" > hello.txt
-
-          # Pull the branch in case it's already created
-          git fetch origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
 
           # Add and commit the file
           git config --local user.email "action@github.com"
