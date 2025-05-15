@@ -11,9 +11,9 @@ on:
       repo:
         required: true
         type: string
-      comment_text: true
-       required: true
-       type: string
+      comment_text:
+        required: true
+        type: string
     secrets:
       DOCS_TOKEN:
         required: true
@@ -55,10 +55,10 @@ jobs:
           MESSAGE_FOR_PROBE="I made some changes in another repo. I will give you the PR informations that made these changes.
           PR_TITLE: \\n${{ env.PR_TITLE }}
           PR_BODY: \\n${{ env.PR_BODY }}
-          
+
           Here is the user's request related to the changes:
           PR_COMMENT: \\n${{ env.PR_COMMENT }}
-          
+
           Your role is ONLY to give me the files that are relevant to the request in this repo and nothing else.
           For exemple, if the pr mentions flows, search for flows related files in this repo.
           Give me all the files relevant to this request. Your output MUST be a single json array that can be parsed with programatic json parsing, with the relevant files.
