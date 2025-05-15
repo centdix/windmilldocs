@@ -83,6 +83,9 @@ jobs:
         run: |
           echo "hello world" > hello.txt
 
+          # Pull the branch in case it's already created
+          git fetch origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+
           # Add and commit the file
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
