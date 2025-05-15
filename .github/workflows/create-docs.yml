@@ -106,6 +106,47 @@ jobs:
             git checkout -b docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
           fi
 
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Install Aider and Dependencies
+        run: |
+          python -m pip install aider-install; aider-install
+          pip install -U google-generativeai
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run Aider
+        run: |
+          PROMPT="I made some changes in another repo. I will give you the PR informations that made these changes.
+          PR_TITLE: ${{ env.PR_TITLE }}
+          PR_BODY: ${{ env.PR_BODY }}
+
+          Here is the user's request related to the changes:
+          PR_COMMENT: ${{ env.PR_COMMENT }}
+
+          I want you to update the files in this repo to reflect the changes in the other repo. It can be a change in an existing file or a complete new file.
+
+          echo "Files identified by probe-chat: ${{ env.FILES_TO_EDIT }}"
+          aider \
+            --read .cursor/rules/docs.mdc \
+            ${{ env.FILES_TO_EDIT }} \
+            --model gemini/gemini-2.5-pro-preview-05-06 \
+            --message $PROMPT \
+            --yes \
+            --no-check-update \
+            --auto-commits \
+            --no-analytics \
+            --no-gitignore \
+            | tee .github/aider/aider-output.txt || true
+          echo "Aider command completed. Output saved to .github/aider/aider-output.txt"
+          # Check if there are any changes to commit
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes detected after running Aider."
+            echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
+
       # 4) send PR content to external API
       # - name: Send to external API
       #   id: api-call
@@ -140,18 +181,6 @@ jobs:
 
       #     # Store response for next step
       #     echo "API_RESPONSE=$RESPONSE_BODY" >> $GITHUB_ENV
-
-      # 5) commit the changes from API output
-      - name: Create hello world file
-        run: |
-          echo "hello world" > hello.txt
-
-          # Add and commit the file
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add hello.txt
-          git commit -m "docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}" || echo "No changes to commit"
-          git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
 
       # 6) open a PR to main from that branch
       - name: Create docs PR
