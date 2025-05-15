@@ -309,6 +309,7 @@ const sidebars = {
 				'misc/architecture/index',
 				'core_concepts/auto_generated_uis/index',
 				'core_concepts/json_schema_and_parsing/index',
+				'core_concepts/schema_validation',
 				'core_concepts/instant_preview/index',
 				{
 					type: 'category',
