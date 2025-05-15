@@ -17,8 +17,6 @@ on:
     secrets:
       DOCS_TOKEN:
         required: true
-      GEMINI_API_KEY:
-        required: true
       GOOGLE_API_KEY:
         required: true
 
@@ -116,6 +114,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y jq
 
       - name: Run Aider
+        id: aider
+        env:
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           PROMPT="I made some changes in another repo. I will give you the PR informations that made these changes.
           PR_TITLE: ${{ env.PR_TITLE }}
