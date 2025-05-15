@@ -22,10 +22,9 @@ on:
 
 jobs:
   generate-and-pr:
-    runs-on: ubuntu-latest # TODO: use ubicloud
+    runs-on: ubicloud-standard-8
 
     steps:
-      # 1) fetch PR title and body from other repo
       - name: Fetch PR details
         id: fetch-pr
         run: |
@@ -42,55 +41,11 @@ jobs:
           PR_COMMENT=$(echo "${{ inputs.comment_text }}" | sed 's/\/docs//g')
           echo "PR_COMMENT=$PR_COMMENT" >> $GITHUB_ENV
 
-      # 2) check out this (docs) repo
       - uses: actions/checkout@v3
         with:
           repository: centdix/windmilldocs # TODO: change this
           token: ${{ secrets.DOCS_TOKEN }}
 
-      # use probe to find relevant files
-      - name: Probe Chat for Relevant Files
-        id: probe_files
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        run: |
-          echo "Running probe-chat to find relevant files..."
-          MESSAGE_FOR_PROBE="I made some changes in another repo. I will give you the PR informations that made these changes.
-          PR_TITLE: \\n${{ env.PR_TITLE }}
-          PR_BODY: \\n${{ env.PR_BODY }}
-
-          Here is the user's request related to the changes:
-          PR_COMMENT: \\n${{ env.PR_COMMENT }}
-
-          Your role is ONLY to give me the files that are relevant to the request in this repo and nothing else.
-          For exemple, if the pr mentions flows, search for flows related files in this repo.
-          Give me all the files relevant to this request. Your output MUST be a single json array that can be parsed with programatic json parsing, with the relevant files.
-          DO NOT INCLUDE ANY OTHER TEXT IN YOUR OUTPUT. ONLY THE JSON ARRAY. Example of output: [\"file1.py\", \"file2.py\"]"
-
-          set -o pipefail
-          PROBE_OUTPUT=$(npx --yes @buger/probe-chat@latest --max-iterations 50 --model-name gemini-2.5-pro-preview-05-06 --message "$MESSAGE_FOR_PROBE" 2>&1) || {
-            echo "::error::probe-chat command failed. Output:"
-            echo "$PROBE_OUTPUT"
-            exit 1
-          }
-          set +o pipefail
-          echo "Probe-chat raw output:"
-          echo "$PROBE_OUTPUT"
-
-          JSON_FILES=$(echo "$PROBE_OUTPUT" | sed -n '/^\s*\[/,$p' | sed '/^\s*\]/q')
-          echo "Extracted JSON block:"
-          echo "$JSON_FILES"
-
-          FILES_LIST=$(echo "$JSON_FILES" | jq -e -r '[.[] | select(type == "string" and . != "" and . != null and (endswith("/") | not))] | map(@sh) | join(" ")' || echo "")
-
-          if [[ -z "$FILES_LIST" ]]; then
-             echo "::warning::probe-chat did not identify any relevant files."
-          fi
-
-          echo "Formatted files list for aider: $FILES_LIST"
-          echo "FILES_TO_EDIT=$FILES_LIST" >> $GITHUB_ENV
-
-      # 3) create a new branch from main
       - name: Create new branch
         run: |
           # Check if branch already exists remotely
@@ -147,42 +102,6 @@ jobs:
           fi
           git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
 
-      # 4) send PR content to external API
-      # - name: Send to external API
-      #   id: api-call
-      #   run: |
-      #     echo "Sending PR content to external API..."
-
-      #     PR_TITLE_ESC=$(printf '%q' "${{ env.PR_TITLE }}")
-      #     PR_BODY_ESC=$(printf '%q' "${{ env.PR_BODY }}")
-
-      #     JSON_PAYLOAD=$(jq -n \
-      #       --arg title "$PR_TITLE_ESC" \
-      #       --arg body "$PR_BODY_ESC" \
-      #       '{"body":{"pr_title":$title,"pr_body":$body,"repo":"${{ inputs.repo }}","pr_number":${{ inputs.pr_number }}}}')
-
-      #     API_RESULT=$(curl -s -w "\n%{http_code}" \
-      #       -X POST "https://app.windmill.dev/api/w/windmill-labs/jobs/run_wait_result/p/f/ai/quiet_script" \
-      #       -H "Content-Type: application/json" \
-      #       -H "Authorization: Bearer ${{ secrets.WINDMILL_TOKEN }}" \
-      #       --data-binary "$JSON_PAYLOAD" \
-      #       --max-time 90)
-
-      #     HTTP_CODE=$(echo "$API_RESULT" | tail -n1)
-      #     RESPONSE_BODY=$(echo "$API_RESULT" | sed '$d')
-
-      #     if [ "$HTTP_CODE" -ne 200 ]; then
-      #       echo "API call failed with status code $HTTP_CODE: $RESPONSE_BODY"
-      #       exit 1
-      #     fi
-
-      #     # Extract the changes from API response
-      #     echo "$RESPONSE_BODY" | jq -r '.changes[]?' > changes.json
-
-      #     # Store response for next step
-      #     echo "API_RESPONSE=$RESPONSE_BODY" >> $GITHUB_ENV
-
-      # 6) open a PR to main from that branch
       - name: Create docs PR
         env:
           GH_TOKEN: ${{ secrets.DOCS_TOKEN }}
