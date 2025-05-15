@@ -88,27 +88,15 @@ jobs:
           git config --local user.name "GitHub Action"
           git add hello.txt
           git commit -m "docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}" || echo "No changes to commit"
-
-      - name: Push changes
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.DOCS_TOKEN }}@github.com/centdix/windmilldocs.git
           git push origin docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
 
       # 6) open a PR to main from that branch
       - name: Create docs PR
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.DOCS_TOKEN }}
-          commit-message: |
-            docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}
-          branch: docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }}
-          base: main
-          title: >
-            Docs updates for ${{ inputs.repo }}#${{ inputs.pr_number }}
-          body: |
-            This PR was auto-generated to bring the docs up to date
-            for [PR #${{ inputs.pr_number }}](
-            https://github.com/windmill-labs/${{ inputs.repo }}/pull/${{ inputs.pr_number }})
-            in the main repo.
-          repository: centdix/windmilldocs
-          path: .
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_TOKEN }}
+        run: |
+          gh pr create \
+            --title "docs: update for ${{ inputs.repo }}#${{ inputs.pr_number }}" \
+            --body "This PR was auto-generated to bring the docs up to date for [PR #${{ inputs.pr_number }}](https://github.com/windmill-labs/${{ inputs.repo }}/pull/${{ inputs.pr_number }}) in the main repo." \
+            --head docs-update-for-${{ inputs.repo }}-pr-${{ inputs.pr_number }} \
+            --base main
