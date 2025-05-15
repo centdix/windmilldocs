@@ -302,9 +302,9 @@ You can also do your own filtering and sorting of the options. In the example ab
 
 ## Backend schema validation
 
-By default, the schema is not explicitly checked by Windmill. For example, when triggering a script via [webhook](../4_webhooks/index.mdx), it is possible to pass an arbitrary JSON payload for the arguments, and Windmill [workers](../9_worker_groups/index.mdx) will just try to execute the script with it.
+Windmill offers robust backend schema validation to ensure that script arguments strictly conform to their defined JSON Schema. While auto-generated UIs provide client-side checks, this server-side validation is essential for programmatic invocations, such as through [webhooks](../4_webhooks/index.mdx) or direct API calls, where input data might bypass UI-level validation. It prevents scripts from running with malformed or incorrect data.
 
-In some cases, you might want the job to fail if the payload does not follow the defined schema. For this, just add the `schema_validation` annotation as a comment to the top of your script. The logs should tell you if schema validation is taking place.
+To enforce schema validation for a script, add the `schema_validation` annotation (as a comment) at the beginning of your script file. When enabled, Windmill will reject job executions if the provided arguments do not match the schema. The job logs will indicate whether schema validation is active and report any validation errors. This validation acts as a crucial safeguard, ensuring data integrity and preventing unexpected runtime errors, thereby enhancing the overall reliability of your workflows.
 
 For example in [TypeScript](../../getting_started/0_scripts_quickstart/1_typescript_quickstart/index.mdx):
 
