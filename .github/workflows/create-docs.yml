@@ -53,6 +53,8 @@ jobs:
       # use probe to find relevant files
       - name: Probe Chat for Relevant Files
         id: probe_files
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           echo "Running probe-chat to find relevant files..."
           MESSAGE_FOR_PROBE="I made some changes in another repo. I will give you the PR informations that made these changes.
