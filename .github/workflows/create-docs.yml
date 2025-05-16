@@ -72,6 +72,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
+          echo "PR_TITLE: ${{ env.PR_TITLE }}"
+          echo "PR_BODY: ${{ env.PR_BODY }}"
+          echo "PR_COMMENT: ${{ env.PR_COMMENT }}"
           PROMPT="I made some changes in another repo. I will give you the PR informations that made these changes.
           PR_TITLE: ${{ env.PR_TITLE }}
           PR_BODY: ${{ env.PR_BODY }}
