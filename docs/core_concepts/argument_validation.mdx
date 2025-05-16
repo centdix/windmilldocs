@@ -1,0 +1,30 @@
+---
+title: Argument Validation
+slug: /docs/core_concepts/argument_validation
+---
+
+import DocCard from '@site/src/components/DocCard';
+
+# Argument Validation
+
+Windmill places a strong emphasis on ensuring that the data flowing into your scripts, flows, and resources is correct and adheres to expected formats. Argument validation is a key mechanism for this, helping to prevent errors, improve reliability, and make debugging easier.
+
+When you define inputs for your scripts (e.g., function parameters in Python or TypeScript) or configure flows and resources, Windmill often infers or uses explicit schemas (like JSON Schemas) to understand the expected structure and types of these inputs.
+
+## How it Works
+
+Argument validation typically involves:
+
+-   **Type Checking**: Ensuring that a number is a number, a string is a string, a boolean is a boolean, etc.
+-   **Required Fields**: Verifying that all mandatory inputs are provided.
+-   **Format Constraints**: Checking if a string matches a specific pattern (e.g., email, URL).
+-   **Range/Value Constraints**: Ensuring numbers are within a certain range, or strings are among a list of allowed values.
+-   **Structural Validation**: For complex objects or arrays, ensuring they have the correct properties and structure.
+
+If arguments passed during an execution (e.g., when running a script, triggering a flow, or using a resource) do not meet these validation criteria, Windmill will typically raise an error before the core logic of the script or flow is executed. This immediate feedback is crucial for identifying issues quickly.
+
+## Recent Enhancements
+
+Recent updates have further improved the argument validation system, addressing specific edge cases and enhancing its overall robustness. These fixes ensure more consistent and reliable validation across different parts of Windmill.
+
+By leveraging robust argument validation, you can build more resilient and predictable automations.
