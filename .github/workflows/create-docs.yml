@@ -5,9 +5,6 @@ on:
       pr_number:
         required: true
         type: number
-      pr_branch:
-        required: true
-        type: string
       repo:
         required: true
         type: string
@@ -43,8 +40,54 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: centdix/windmilldocs # TODO: change this
+          repository: centdix/windmilldocs
           token: ${{ secrets.DOCS_TOKEN }}
+
+      - name: Probe Chat for Relevant Files
+        id: probe_files
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          echo "Running probe-chat to find relevant files..."
+          MESSAGE_FOR_PROBE="I made some changes in another repo. I will give you the PR informations that made these changes.
+          PR_TITLE: \\n${{ env.PR_TITLE }}
+          PR_BODY: \\n${{ env.PR_BODY }}
+
+          Here is the user's request related to the changes:
+          PR_COMMENT: \\n${{ env.PR_COMMENT }}
+
+          Your role is ONLY to give me the files that are relevant to the request in this repo and nothing else.
+          For exemple, if the pr mentions flows, search for flows related files in this repo.
+          Give me all the files relevant to this request. Your output MUST be a single json array that can be parsed with programatic json parsing, with the relevant files.
+          DO NOT INCLUDE ANY OTHER TEXT IN YOUR OUTPUT. ONLY THE JSON ARRAY. Example of output: [\"file1.py\", \"file2.py\"]"
+
+          set -o pipefail
+          PROBE_OUTPUT=$(npx --yes @buger/probe-chat@latest --max-iterations 50 --model-name gemini-2.5-pro-preview-05-06 --message "$MESSAGE_FOR_PROBE" 2>&1) || {
+            echo "::error::probe-chat command failed. Output:"
+            echo "$PROBE_OUTPUT"
+            exit 1
+          }
+          set +o pipefail
+          echo "Probe-chat raw output:"
+          echo "$PROBE_OUTPUT"
+
+          JSON_FILES=$(echo "$PROBE_OUTPUT" | sed -n '/^\s*\[/,$p' | sed '/^\s*\]/q')
+          echo "Extracted JSON block:"
+          echo "$JSON_FILES"
+
+          # Convert to valid JSON by adding quotes around strings
+          VALID_JSON=$(echo "$JSON_FILES" | sed 's/\[\(.*\)\]/["\1"]/' | sed 's/, /", "/g')
+          echo "Valid JSON:"
+          echo "$VALID_JSON"
+
+          FILES_LIST=$(echo "$VALID_JSON" | jq -e -r '.[] | select(. != "" and . != null and (endswith("/") | not))' || echo "")
+
+          if [[ -z "$FILES_LIST" ]]; then
+             echo "::warning::probe-chat did not identify any relevant files."
+          fi
+
+          echo "Formatted files list for aider: $FILES_LIST"
+          echo "FILES_TO_EDIT=$FILES_LIST" >> $GITHUB_ENV
 
       - name: Create new branch
         run: |
@@ -72,9 +115,6 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
-          echo "PR_TITLE: ${{ env.PR_TITLE }}"
-          echo "PR_BODY: ${{ env.PR_BODY }}"
-          echo "PR_COMMENT: ${{ env.PR_COMMENT }}"
           PROMPT="I made some changes in another repo. I will give you the PR informations that made these changes.
           PR_TITLE: ${{ env.PR_TITLE }}
           PR_BODY: ${{ env.PR_BODY }}
