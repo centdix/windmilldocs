@@ -7,6 +7,7 @@ const sidebars = {
 			label: 'About Windmill',
 			items: [
 				'intro',
+				'test',
 				{
 					type: 'doc',
 					id: 'getting_started/how_to_use_windmill/index',
