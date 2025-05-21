@@ -1,0 +1,171 @@
+name: Aider Auto-fix issues and PR comments via external prompt
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  check-and-prepare:
+    runs-on: ubicloud-standard-8
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '/aider') &&
+      !contains(github.event.comment.user.login, '[bot]')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WINDMILL_TOKEN: ${{ secrets.WINDMILL_TOKEN }}
+    outputs:
+      issue_title: ${{ steps.determine_inputs.outputs.ISSUE_TITLE }}
+      issue_body: ${{ steps.determine_inputs.outputs.ISSUE_BODY }}
+      comment_content: ${{ steps.determine_inputs.outputs.COMMENT_CONTENT }}
+      pr_branch: ${{ steps.checkout_pr.outputs.PR_BRANCH }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout PR Branch
+        id: checkout_pr
+        if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Issue comment trigger: Checking out PR branch..."
+          PR_NUMBER=${{ github.event.issue.number }}
+          PR_HEAD_REF=$(gh pr view $PR_NUMBER --json headRefName -q .headRefName --repo $GITHUB_REPOSITORY)
+          if [[ -z "$PR_HEAD_REF" || "$PR_HEAD_REF" == "null" ]]; then
+             echo "::error::Could not determine PR head branch for PR #$PR_NUMBER via gh CLI."
+             exit 1
+          fi
+          echo "Checking out PR head branch: $PR_HEAD_REF for PR #$PR_NUMBER"
+          git fetch origin "refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}" --no-tags
+          git checkout "$PR_HEAD_REF"
+          echo "Successfully checked out branch $(git rev-parse --abbrev-ref HEAD)"
+          echo "PR_BRANCH=$PR_HEAD_REF" >> $GITHUB_OUTPUT
+
+      - name: Determine inputs for Aider
+        id: determine_inputs
+        shell: bash
+        run: |
+          echo "Determining inputs for Aider..."
+          ISSUE_TITLE_VAL=""
+          ISSUE_BODY_VAL=""
+
+          if [[ ! -z "${{ github.event.issue.pull_request }}" ]]; then
+            echo "This is a comment on a Pull Request"
+            PR_NUMBER="${{ github.event.issue.number }}"
+            
+            PR_BODY_JSON=$(GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh pr view "$PR_NUMBER" --json body --repo "$GITHUB_REPOSITORY")
+            if [[ $? -ne 0 ]]; then
+              echo "Error fetching PR body for PR #$PR_NUMBER"
+              PR_BODY_VAL=""
+            else
+              PR_BODY_VAL=$(echo "$PR_BODY_JSON" | jq -r .body)
+            fi
+            
+            if [[ ! -z "$PR_BODY_VAL" ]]; then
+              REFERENCED_ISSUE=$(echo "$PR_BODY_VAL" | grep -oE "#[0-9]+" | grep -oE "[0-9]+" | head -1)
+              
+              if [[ ! -z "$REFERENCED_ISSUE" ]]; then
+                echo "Found referenced issue #$REFERENCED_ISSUE in PR description"
+                
+                ISSUE_DETAILS_JSON=$(GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh issue view "$REFERENCED_ISSUE" --json title,body --repo "$GITHUB_REPOSITORY")
+                if [[ $? -ne 0 ]]; then
+                  echo "Error fetching issue details for #$REFERENCED_ISSUE"
+                else
+                  ISSUE_TITLE_VAL=$(echo "$ISSUE_DETAILS_JSON" | jq -r .title)
+                  ISSUE_BODY_VAL=$(echo "$ISSUE_DETAILS_JSON" | jq -r .body)
+                fi
+              fi
+            else
+              echo "PR body is empty or could not be fetched."
+            fi
+          else
+            echo "This is a comment on a regular issue"
+            ISSUE_NUMBER="${{ github.event.issue.number }}"
+            ISSUE_DETAILS_JSON=$(GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh issue view "$ISSUE_NUMBER" --json title,body --repo "$GITHUB_REPOSITORY")
+            if [[ $? -ne 0 ]]; then
+              echo "Error fetching issue details for #$ISSUE_NUMBER"
+            else
+              ISSUE_TITLE_VAL=$(echo "$ISSUE_DETAILS_JSON" | jq -r .title)
+              ISSUE_BODY_VAL=$(echo "$ISSUE_DETAILS_JSON" | jq -r .body)
+            fi
+          fi
+
+          echo "Setting GITHUB_OUTPUT for ISSUE_TITLE..."
+          echo "ISSUE_TITLE<<EOF_AIDER_TITLE" >> "$GITHUB_OUTPUT"
+          echo "$ISSUE_TITLE_VAL" >> "$GITHUB_OUTPUT"
+          echo "EOF_AIDER_TITLE" >> "$GITHUB_OUTPUT"
+
+          echo "Setting GITHUB_OUTPUT for ISSUE_BODY..."
+          echo "ISSUE_BODY<<EOF_AIDER_BODY" >> "$GITHUB_OUTPUT"
+          echo "$ISSUE_BODY_VAL" >> "$GITHUB_OUTPUT"
+          echo "EOF_AIDER_BODY" >> "$GITHUB_OUTPUT"
+
+          # Process COMMENT_CONTENT
+          RAW_COMMENT_BODY="${{ github.event.comment.body }}"
+          COMMENT_CONTENT_VAL="${RAW_COMMENT_BODY#"/aider"}"
+          echo "COMMENT_CONTENT<<EOF_AIDER_COMMENT" >> "$GITHUB_OUTPUT"
+          echo "$COMMENT_CONTENT_VAL" >> "$GITHUB_OUTPUT"
+          echo "EOF_AIDER_COMMENT" >> "$GITHUB_OUTPUT"
+          echo "Finished determining inputs."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Make sure gh cli has a token
+
+  run-aider:
+    needs: check-and-prepare
+    uses: ./.github/workflows/aider-common.yml
+    with:
+      issue_title: ${{ needs.check-and-prepare.outputs.issue_title }}
+      issue_body: ${{ needs.check-and-prepare.outputs.issue_body }}
+      instruction: ${{ needs.check-and-prepare.outputs.comment_content }}
+    secrets: inherit
+
+  commit-changes:
+    needs: [check-and-prepare, run-aider]
+    runs-on: ubicloud-standard-8
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download repository with aider changes
+        uses: actions/download-artifact@v4
+        with:
+          name: repo-after-aider
+          path: .
+
+      - name: Create Pull Request
+        if: success() && github.event_name == 'issue_comment' && !github.event.issue.pull_request && needs.run-aider.outputs.pr_branch_name != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BRANCH: ${{ needs.run-aider.outputs.pr_branch_name }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ needs.check-and-prepare.outputs.issue_title }}
+        run: |
+          # Create PR description in a temporary file to avoid command line length limits and ensure it stays under 40k chars
+          cat > /tmp/pr-description.md << EOL | head -c 40000
+          This PR was created automatically by Aider to fix issue #${ISSUE_NUM}.
+
+          ## Aider Output
+          \`\`\`
+          $(cat .github/aider/aider-output.txt || echo "No output available")
+          \`\`\`
+          EOL
+
+          # Create PR using the file for the body content
+          gh pr create \
+            --title "[Aider PR] Fix: ${ISSUE_TITLE}" \
+            --body-file /tmp/pr-description.md \
+            --head "$PR_BRANCH" \
+            --base main

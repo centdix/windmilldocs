@@ -68,7 +68,7 @@ jobs:
           echo "Message for probe:"
           echo "$MESSAGE_FOR_PROBE"
           set -o pipefail
-          PROBE_OUTPUT=$(npx --yes @buger/probe-chat@latest --max-iterations 50 --model-name gemini-2.5-pro-preview-05-06 --message "$MESSAGE_FOR_PROBE" 2>&1) || {
+          PROBE_OUTPUT=$(npx --yes @buger/probe-chat@latest --max-iterations 50 --model-name gemini-2.5-pro-preview-05-06 --message "$MESSAGE_FOR_PROBE") || {
             echo "::error::probe-chat command failed. Output:"
             echo "$PROBE_OUTPUT"
             exit 1
