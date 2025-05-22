@@ -35,6 +35,7 @@ jobs:
           else
             COMMENTER="${{ github.event.issue.user.login }}"
           fi
+          echo "COMMENTER: $COMMENTER"
           echo "is_member=true" >> $GITHUB_OUTPUT
 
   claude-code-action:
