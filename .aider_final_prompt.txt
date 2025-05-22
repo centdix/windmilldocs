@@ -1,0 +1,5 @@
+Try to fix the following issue based on the instruction given by the user. The issue is prepended with the word ISSUE. The instruction is prepended with the word INSTRUCTION. The issue and instruction are separated by a blank line.
+ISSUE:
+This is a test issue with no specific problem description or error messages provided. Further details are needed to understand the context or any potential underlying problem.
+INSTRUCTION:
+/aider this is a test just create a test.txt file with hello in it#/aider}
