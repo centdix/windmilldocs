@@ -100,7 +100,7 @@ jobs:
           # 3. Create and run a Node.js script to safely update the changelog file
           cat > update_changelog.js <<'EOF'
           const fs = require('fs');
-          const file = 'frontend/changelogs.ts';
+          const file = 'frontend/src/lib/components/sidebar/changelogs.ts';
 
           if (!fs.existsSync(file)) {
             console.error(`Error: ${file} not found in repository.`);
@@ -134,7 +134,7 @@ jobs:
           node update_changelog.js
 
           # 4. Commit and push the changes if any were made
-          git add frontend/changelogs.ts
+          git add frontend/src/lib/components/sidebar/changelogs.ts
 
           if git diff --staged --quiet; then
             echo "No changes to commit."
