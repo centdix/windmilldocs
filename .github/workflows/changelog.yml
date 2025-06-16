@@ -34,7 +34,7 @@ jobs:
           echo "Found new changelog files:"
           echo "$new_files"
 
-          json_array=$(echo "$new_files" | while read -r file; do dirname "$file"; done | jq -R . | jq -s .)
+          json_array=$(echo "$new_files" | while read -r file; do dirname "$file"; done | jq -R . | jq -sc .)
           echo "entries=${json_array}" >> $GITHUB_OUTPUT
 
   process-new-entries:
