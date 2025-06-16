@@ -136,7 +136,15 @@ jobs:
 
           # Create a new branch
           BRANCH_NAME="changelog-update-${GITHUB_RUN_ID}"
-          git checkout -b "${BRANCH_NAME}"
+          BRANCH_EXISTS=false
+          # Check if branch exists, otherwise create it
+          if git ls-remote --heads origin "${BRANCH_NAME}" | grep -q "${BRANCH_NAME}"; then
+            git checkout "${BRANCH_NAME}"
+            BRANCH_EXISTS=true
+          else
+            git checkout -b "${BRANCH_NAME}"
+            BRANCH_EXISTS=false
+          fi
 
           # 4. Commit and push the changes if any were made
           git add frontend/src/lib/components/sidebar/changelogs.ts
@@ -148,7 +156,9 @@ jobs:
             git commit -m "docs(changelog): add '${CHANGELOG_TITLE}'"
             git push origin "${BRANCH_NAME}"
             echo "Successfully pushed changelog update to ${FRONTEND_REPO}."
-            gh pr create --title "docs(changelog): add '${CHANGELOG_TITLE}'" --body "This PR adds a new changelog entry for '${CHANGELOG_TITLE}'." --base main --head "${BRANCH_NAME}"
+            if [ "$BRANCH_EXISTS" = false ]; then
+              gh pr create --title "docs(changelog): add '${CHANGELOG_TITLE}'" --body "This PR adds a new changelog entry for '${CHANGELOG_TITLE}'." --base main --head "${BRANCH_NAME}"
+            fi
           fi
 
           echo "---"
