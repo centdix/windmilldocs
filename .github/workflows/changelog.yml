@@ -70,11 +70,79 @@ jobs:
           echo "title=${title}" >> $GITHUB_OUTPUT
           echo "slug=${slug}" >> $GITHUB_OUTPUT
 
-      - name: Use extracted data
+      - name: Update changelog in frontend repository
+        env:
+          CHANGELOG_TITLE: ${{ steps.extract_data.outputs.title }}
+          CHANGELOG_SLUG: ${{ steps.extract_data.outputs.slug }}
+          CHANGELOG_DATE: ${{ steps.extract_data.outputs.date }}
+          FRONTEND_REPO_PAT: ${{ secrets.FRONTEND_REPO_PAT }}
+          FRONTEND_REPO: centdix/windmill-test # Important: Verify this is the correct repository
         run: |
+          set -e
+
+          if [ -z "$FRONTEND_REPO_PAT" ]; then
+            echo "Error: FRONTEND_REPO_PAT secret is not set. Aborting."
+            exit 1
+          fi
+
           echo "---"
-          echo "Using extracted data for a new step:"
-          echo "Date: ${{ steps.extract_data.outputs.date }}"
-          echo "Title: ${{ steps.extract_data.outputs.title }}"
-          echo "Slug: ${{ steps.extract_data.outputs.slug }}"
+          echo "Starting changelog update for: '${CHANGELOG_TITLE}'"
+
+          # 1. Configure Git for the action
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # 2. Clone the frontend repository
+          echo "Cloning ${FRONTEND_REPO}..."
+          git clone "https://x-access-token:${FRONTEND_REPO_PAT}@github.com/${FRONTEND_REPO}.git" frontend_repo
+          cd frontend_repo
+
+          # 3. Create and run a Node.js script to safely update the changelog file
+          cat > update_changelog.js <<'EOF'
+          const fs = require('fs');
+          const file = 'frontend/changelogs.ts';
+
+          if (!fs.existsSync(file)) {
+            console.error(`Error: ${file} not found in repository.`);
+            process.exit(1);
+          }
+
+          const content = fs.readFileSync(file, 'utf-8');
+
+          const title = process.env.CHANGELOG_TITLE.replace(/'/g, "\\'");
+          const slug = process.env.CHANGELOG_SLUG;
+          const date = process.env.CHANGELOG_DATE;
+
+          const newEntryString = `\t{\n\t\tlabel: '${title}',\n\t\thref: 'https://www.windmill.dev/changelog/${slug}',\n\t\tdate: '${date}'\n\t},`;
+
+          // Prevent adding a duplicate entry
+          if (content.includes(`href: 'https://www.windmill.dev/changelog/${slug}'`)) {
+            console.log("Changelog entry with this slug already exists. Skipping.");
+            process.exit(0);
+          }
+
+          // Prepend the new entry to the array
+          const newContent = content.replace(
+            /(const changelogs: Changelog\[] = \[)/,
+            `$1\n${newEntryString}`
+          );
+
+          fs.writeFileSync(file, newContent);
+          console.log(`Successfully prepared update for ${file}`);
+          EOF
+
+          node update_changelog.js
+
+          # 4. Commit and push the changes if any were made
+          git add frontend/changelogs.ts
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            echo "Committing and pushing changes..."
+            git commit -m "docs(changelog): add '${CHANGELOG_TITLE}'"
+            git push origin HEAD:main # Pushes to the 'main' branch of the frontend repo
+            echo "Successfully pushed changelog update to ${FRONTEND_REPO}."
+          fi
+
           echo "---"
