@@ -1,0 +1,80 @@
+name: Process New Changelog Entry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'changelog/**'
+
+jobs:
+  find-new-entries:
+    runs-on: ubuntu-latest
+    outputs:
+      new_entries: ${{ steps.find_entries.outputs.entries }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessary to compare commits
+
+      - name: Find new changelog entry directories
+        id: find_entries
+        run: |
+          # Compare the state before and after the push to find added files.
+          # We only care about index.md files to identify new entries.
+          new_files=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.event.after }} | grep '^changelog/.*/index.md$')
+
+          if [ -z "$new_files" ]; then
+            echo "entries=[]" >> $GITHUB_OUTPUT
+            echo "No new changelog entries found."
+            exit 0
+          fi
+
+          echo "Found new changelog files:"
+          echo "$new_files"
+
+          json_array=$(echo "$new_files" | while read -r file; do dirname "$file"; done | jq -R . | jq -s .)
+          echo "entries=${json_array}" >> $GITHUB_OUTPUT
+
+  process-new-entries:
+    needs: find-new-entries
+    if: needs.find-new-entries.outputs.new_entries != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        entry_path: ${{ fromJson(needs.find-new-entries.outputs.new_entries) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract changelog data
+        id: extract_data
+        run: |
+          folder_path="${{ matrix.entry_path }}"
+          index_file="$folder_path/index.md"
+
+          echo "Processing entry: $folder_path"
+
+          folder_name=$(basename "$folder_path")
+
+          # Extract date from folder name (e.g., YYYY-MM-DD-slug-name -> YYYY-MM-DD)
+          date=$(echo "$folder_name" | cut -d'-' -f1-3)
+
+          # Extract slug and title from the frontmatter of index.md
+          slug=$(grep 'slug:' "$index_file" | sed 's/slug: "\(.*\)"/\1/')
+          title=$(grep 'title:' "$index_file" | sed 's/title: "\(.*\)"/\1/')
+
+          echo "date=${date}" >> $GITHUB_OUTPUT
+          echo "title=${title}" >> $GITHUB_OUTPUT
+          echo "slug=${slug}" >> $GITHUB_OUTPUT
+
+      - name: Use extracted data
+        run: |
+          echo "---"
+          echo "Using extracted data for a new step:"
+          echo "Date: ${{ steps.extract_data.outputs.date }}"
+          echo "Title: ${{ steps.extract_data.outputs.title }}"
+          echo "Slug: ${{ steps.extract_data.outputs.slug }}"
+          echo "---"
