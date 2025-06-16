@@ -8,10 +8,8 @@ on:
       - 'changelog/**'
 
 jobs:
-  find-new-entries:
+  process-changelog:
     runs-on: ubuntu-latest
-    outputs:
-      new_entries: ${{ steps.find_entries.outputs.entries }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,37 +20,27 @@ jobs:
         id: find_entries
         run: |
           # Compare the state before and after the push to find added files.
-          # We only care about index.md files to identify new entries.
           new_files=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.event.after }} | grep '^changelog/.*/index.md$')
-
           if [ -z "$new_files" ]; then
             echo "entries=[]" >> $GITHUB_OUTPUT
             echo "No new changelog entries found."
-            exit 0
+          else
+            echo "Found new changelog files:"
+            echo "$new_files"
+            json_array=$(echo "$new_files" | while read -r file; do dirname "$file"; done | jq -R . | jq -sc .)
+            echo "entries=${json_array}" >> $GITHUB_OUTPUT
           fi
 
-          echo "Found new changelog files:"
-          echo "$new_files"
-
-          json_array=$(echo "$new_files" | while read -r file; do dirname "$file"; done | jq -R . | jq -sc .)
-          echo "entries=${json_array}" >> $GITHUB_OUTPUT
-
-  update-frontend-changelog:
-    needs: find-new-entries
-    if: needs.find-new-entries.outputs.new_entries != '[]'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Setup Node.js
+        if: steps.find_entries.outputs.entries != '[]'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Update changelog in frontend repository
+        if: steps.find_entries.outputs.entries != '[]'
         env:
-          NEW_ENTRIES: ${{ needs.find-new-entries.outputs.new_entries }}
+          NEW_ENTRIES: ${{ steps.find_entries.outputs.entries }}
           GH_TOKEN: ${{ secrets.FRONTEND_REPO_PAT }}
           FRONTEND_REPO: centdix/windmill-test # Important: Verify this is the correct repository
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -75,14 +63,13 @@ jobs:
           BRANCH_NAME="changelog-update-${GITHUB_RUN_ID}"
           git checkout -b "${BRANCH_NAME}"
           # 4. Run the Node.js script to update the changelog file
-          # The script is in the original repository, so we reference it with ../
           node ../.github/scripts/update-changelog.js
           # 5. Commit and push the changes if any were made
           git add frontend/src/lib/components/sidebar/changelogs.ts
           if git diff --staged --quiet; then
             echo "No changes to commit. The changelog entries may already exist."
           else
-            COMMIT_MESSAGE="docs(changelog): add new entries from run ${GITHUB_RUN_ID}"
+            COMMIT_MESSAGE="docs(changelog): add new entries from changelog"
             echo "Committing and pushing changes..."
             git commit -m "${COMMIT_MESSAGE}"
             git push origin "${BRANCH_NAME}"
