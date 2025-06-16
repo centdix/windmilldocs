@@ -63,8 +63,8 @@ jobs:
           date=$(echo "$folder_name" | cut -d'-' -f1-3)
 
           # Extract slug and title from the frontmatter of index.md
-          slug=$(grep 'slug:' "$index_file" | sed 's/slug: "\(.*\)"/\1/')
-          title=$(grep 'title:' "$index_file" | sed 's/title: "\(.*\)"/\1/')
+          slug=$(grep 'slug:' "$index_file" | sed 's/slug: \(.*\)/\1/' | sed 's/"//g')
+          title=$(grep 'title:' "$index_file" | sed 's/title: \(.*\)/\1/' | sed 's/"//g')
 
           echo "date=${date}" >> $GITHUB_OUTPUT
           echo "title=${title}" >> $GITHUB_OUTPUT
