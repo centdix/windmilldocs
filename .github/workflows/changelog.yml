@@ -16,7 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necessary to compare commits
+          fetch-depth: 0
 
       - name: Find new changelog entry directories
         id: find_entries
@@ -75,13 +75,14 @@ jobs:
           CHANGELOG_TITLE: ${{ steps.extract_data.outputs.title }}
           CHANGELOG_SLUG: ${{ steps.extract_data.outputs.slug }}
           CHANGELOG_DATE: ${{ steps.extract_data.outputs.date }}
-          FRONTEND_REPO_PAT: ${{ secrets.FRONTEND_REPO_PAT }}
+          GH_TOKEN: ${{ secrets.FRONTEND_REPO_PAT }}
           FRONTEND_REPO: centdix/windmill-test # Important: Verify this is the correct repository
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -e
 
-          if [ -z "$FRONTEND_REPO_PAT" ]; then
-            echo "Error: FRONTEND_REPO_PAT secret is not set. Aborting."
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Error: GH_TOKEN secret is not set. Aborting."
             exit 1
           fi
 
@@ -94,7 +95,7 @@ jobs:
 
           # 2. Clone the frontend repository
           echo "Cloning ${FRONTEND_REPO}..."
-          git clone "https://x-access-token:${FRONTEND_REPO_PAT}@github.com/${FRONTEND_REPO}.git" frontend_repo
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${FRONTEND_REPO}.git" frontend_repo
           cd frontend_repo
 
           # 3. Create and run a Node.js script to safely update the changelog file
@@ -133,6 +134,10 @@ jobs:
 
           node update_changelog.js
 
+          # Create a new branch
+          BRANCH_NAME="changelog-update-${GITHUB_RUN_ID}"
+          git checkout -b "${BRANCH_NAME}"
+
           # 4. Commit and push the changes if any were made
           git add frontend/src/lib/components/sidebar/changelogs.ts
 
@@ -141,8 +146,9 @@ jobs:
           else
             echo "Committing and pushing changes..."
             git commit -m "docs(changelog): add '${CHANGELOG_TITLE}'"
-            git push origin HEAD:main # Pushes to the 'main' branch of the frontend repo
+            git push origin "${BRANCH_NAME}"
             echo "Successfully pushed changelog update to ${FRONTEND_REPO}."
+            gh pr create --title "docs(changelog): add '${CHANGELOG_TITLE}'" --body "This PR adds a new changelog entry for '${CHANGELOG_TITLE}'." --base main --head "${BRANCH_NAME}"
           fi
 
           echo "---"
