@@ -1,7 +1,7 @@
 ---
-slug: sql-to-s3-streaming
+slug: other-test
 version: v1.491.0
-title: SQL to S3 streaming
+title: Other test
 tags: ['ee', 'scripts', 'storage']
 description: You can stream the results of a large SQL query to an S3 file in your workspace storages
 features:
